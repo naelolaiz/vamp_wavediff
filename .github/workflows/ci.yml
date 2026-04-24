@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (Ubuntu, Qt5 + Vamp SDK)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            ninja-build \
+            pkg-config \
+            qtbase5-dev \
+            qtdeclarative5-dev \
+            qtquickcontrols2-5-dev \
+            qml-module-qtquick-controls2 \
+            qml-module-qtquick-dialogs \
+            qml-module-qtquick-layouts \
+            vamp-plugin-sdk \
+            libvamp-sdk2v5 \
+            sox \
+            libsox-fmt-all
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Install (staging)
+        run: |
+          DESTDIR="${{ github.workspace }}/stage" \
+            cmake --install build --prefix /usr
+          find stage -type f | sort
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wavediff-linux-x86_64
+          path: stage/
+          retention-days: 14
+
+  plugin-only:
+    name: Build plugin standalone
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config \
+            vamp-plugin-sdk libvamp-sdk2v5
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DWAVEDIFF_BUILD_UI=OFF
+
+      - name: Build
+        run: cmake --build build --parallel
+
+  format:
+    name: clang-format
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang-format
+
+      - name: Verify formatting
+        run: |
+          files=$(git ls-files '*.cpp' '*.h' '*.hpp' '*.cc')
+          if [ -z "$files" ]; then
+            echo "No C/C++ sources to check."
+            exit 0
+          fi
+          printf '%s\n' $files
+          clang-format --version
+          clang-format --dry-run --Werror $files
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends shellcheck
+
+      - name: Run shellcheck
+        run: |
+          files=$(git ls-files '*.sh')
+          if [ -z "$files" ]; then
+            echo "No shell scripts to check."
+            exit 0
+          fi
+          shellcheck --severity=warning $files
