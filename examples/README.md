@@ -11,16 +11,19 @@ library, so there are no extra dependencies to install.
 python3 examples/generate_example.py
 ```
 
-This writes three files under `examples/out/`:
+This writes four files under `examples/out/`:
 
-| File             | Layout      | Contents                                          |
-| ---------------- | ----------- | ------------------------------------------------- |
+| File             | Layout       | Contents                                          |
+| ---------------- | ------------ | ------------------------------------------------- |
 | `reference.wav`  | 1 ch, 48 kHz | 2 s, 440 Hz sine at -6 dBFS                       |
 | `candidate.wav`  | 1 ch, 48 kHz | reference + white noise at -40 dBFS               |
 | `merged.wav`     | 2 ch, 48 kHz | interleaved `(A, B)` — what the plugin consumes   |
+| `plot.svg`       | 1000×~580 px | min/max envelope of A, B, and A-B + per-block RMS |
 
 `merged.wav` skips the SoX-based `scripts/merger.sh` step so you can run
-the plugin even on machines without SoX installed.
+the plugin even on machines without SoX installed. Open `plot.svg` in any
+browser to visually compare the streams — the bottom panel auto-scales to
+the diff signal's peak so the noise is actually visible against the sine.
 
 ## Analyse with the plugin
 
