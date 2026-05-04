@@ -25,8 +25,10 @@ decibels via a plugin parameter.
 ├── plugin/          # Vamp plugin (C++17, builds a MODULE library)
 │   └── plugins/     # WaveDiffPlugin.{h,cpp} and descriptor registration
 ├── ui/              # Qt 5.15 Quick Controls 2 frontend (Material dark)
+├── tests/           # CTest unit tests for the plugin core
+├── examples/        # End-to-end demo (generates ref/candidate/merged wavs)
 ├── scripts/         # merger.sh — SoX-based channel interleaver (CLI helper)
-└── CMakeLists.txt   # Top-level orchestrator (builds plugin and UI)
+└── CMakeLists.txt   # Top-level orchestrator (builds plugin, UI, tests)
 ```
 
 ## Requirements
@@ -52,6 +54,7 @@ To build only a subsystem:
 ```sh
 cmake -S . -B build -DWAVEDIFF_BUILD_UI=OFF       # plugin only
 cmake -S . -B build -DWAVEDIFF_BUILD_PLUGIN=OFF   # UI only
+cmake -S . -B build -DWAVEDIFF_BUILD_TESTS=OFF    # skip unit tests
 ```
 
 If the Vamp SDK is not on `pkg-config`'s search path, point CMake at it:
@@ -59,6 +62,23 @@ If the Vamp SDK is not on `pkg-config`'s search path, point CMake at it:
 ```sh
 cmake -S . -B build -DVAMP_SDK_PATH=/opt/vamp-sdk
 ```
+
+## Tests
+
+Unit tests for the plugin core are wired into CTest:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+ctest --test-dir build --output-on-failure
+```
+
+## Example
+
+A self-contained Python script generates a reference, a noisy candidate,
+and a pre-merged 2-channel file ready to feed into a Vamp host — see
+[examples/README.md](examples/README.md). Standard library only, no extra
+deps.
 
 ## Install
 
