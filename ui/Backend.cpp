@@ -4,8 +4,10 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QProcessEnvironment>
+#include <QRegularExpression>
 #include <QStandardPaths>
 #include <QUrl>
+#include <QVariantMap>
 
 namespace {
 
@@ -13,6 +15,20 @@ constexpr const char* kSoxBinary = "sox";
 constexpr const char* kSoxiBinary = "soxi";
 constexpr const char* kVampHostBinary = "vamp-simple-host";
 constexpr const char* kPluginKey = "vamp_wavediff:wavediff";
+
+struct OutputDef
+{
+  const char* id;
+  const char* label;
+  const char* color;
+};
+
+constexpr OutputDef kOutputs[] = {
+  { "rms_a", "RMS A", "#42a5f5" },
+  { "rms_b", "RMS B", "#66bb6a" },
+  { "rms_diff", "RMS A-B", "#ef5350" },
+  { "peak_diff", "Peak |A-B|", "#ffa726" },
+};
 
 QStringList
 buildRemixArgs(int channelsPerInput)
@@ -78,6 +94,7 @@ Backend::runDiff(const QString& fileA, const QString& fileB)
   m_fileB = b;
   setResults(QString());
   setError(QString());
+  resetPlotState();
 
   const QString tmpDir =
     QStandardPaths::writableLocation(QStandardPaths::TempLocation);
@@ -178,13 +195,33 @@ Backend::onMergeFinished(int exitCode, QProcess::ExitStatus status)
     return;
   }
 
-  startAnalyze();
+  m_series.clear();
+  for (const auto& o : kOutputs) {
+    Series s;
+    s.id = QString::fromLatin1(o.id);
+    s.label = QString::fromLatin1(o.label);
+    s.color = QString::fromLatin1(o.color);
+    m_series.append(s);
+  }
+  m_currentSeriesIdx = 0;
+  startAnalyzeNext();
 }
 
 void
-Backend::startAnalyze()
+Backend::startAnalyzeNext()
 {
-  setStatus(tr("Running wavediff plugin…"));
+  if (m_currentSeriesIdx >= m_series.size()) {
+    rebuildResultsAndPlot();
+    setStatus(tr("Done."));
+    finishWith(true);
+    return;
+  }
+
+  const Series& s = m_series[m_currentSeriesIdx];
+  setStatus(tr("Running wavediff plugin (%1 of %2: %3)…")
+              .arg(m_currentSeriesIdx + 1)
+              .arg(m_series.size())
+              .arg(s.label));
 
   disconnect(m_process, nullptr, this, nullptr);
   connect(m_process, &QProcess::errorOccurred, this, &Backend::onProcessError);
@@ -193,7 +230,10 @@ Backend::startAnalyze()
           this,
           &Backend::onAnalyzeFinished);
 
-  const QStringList args{ QString::fromLatin1(kPluginKey), m_mergedPath };
+  const QStringList args{
+    QStringLiteral("%1:%2").arg(QString::fromLatin1(kPluginKey)).arg(s.id),
+    m_mergedPath
+  };
   m_process->start(QString::fromLatin1(kVampHostBinary), args);
 }
 
@@ -209,9 +249,108 @@ Backend::onAnalyzeFinished(int exitCode, QProcess::ExitStatus status)
     return;
   }
 
-  setResults(output.trimmed());
-  setStatus(tr("Done."));
-  finishWith(true);
+  parseAnalyzeOutput(m_series[m_currentSeriesIdx], output);
+  ++m_currentSeriesIdx;
+  startAnalyzeNext();
+}
+
+void
+Backend::parseAnalyzeOutput(Series& s, const QString& text)
+{
+  // Lines emitted by vamp-simple-host look like:
+  //   <sample>: <value> [<extra-bins> ...] [<label-text>]
+  // The "overall" summary line ends with a label such as "overall RMS A".
+  // We only parse the first bin (single-pair stereo input is the common
+  // case for this UI; multi-pair files would still get bin 0 plotted).
+  static const QRegularExpression re(
+    QStringLiteral(R"(^(\d+):\s+([\d.eE+\-]+)(?:\s+(.*))?$)"));
+
+  const auto lines = text.split(QLatin1Char('\n'));
+  for (const QString& raw : lines) {
+    const QString line = raw.trimmed();
+    if (line.isEmpty())
+      continue;
+    const auto m = re.match(line);
+    if (!m.hasMatch())
+      continue;
+    const qint64 sample = m.captured(1).toLongLong();
+    const double value = m.captured(2).toDouble();
+    const QString rest = m.captured(3);
+    if (!rest.isEmpty() &&
+        rest.contains(QStringLiteral("overall"), Qt::CaseInsensitive)) {
+      s.overall = value;
+      s.hasOverall = true;
+    } else {
+      s.points.append(QPointF(static_cast<qreal>(sample), value));
+    }
+  }
+}
+
+void
+Backend::rebuildResultsAndPlot()
+{
+  // Find the global x-extent and y-max across all series so the plot can
+  // share a single axis.
+  qint64 maxSample = 0;
+  double maxVal = 0.0;
+  for (const Series& s : m_series) {
+    for (const QPointF& p : s.points) {
+      if (p.x() > maxSample)
+        maxSample = static_cast<qint64>(p.x());
+      if (p.y() > maxVal)
+        maxVal = p.y();
+    }
+    if (s.hasOverall && s.overall > maxVal)
+      maxVal = s.overall;
+  }
+  m_totalSamples = maxSample;
+  m_maxValue = maxVal;
+
+  // Build the QML-facing variant list.
+  m_plotSeries.clear();
+  for (const Series& s : m_series) {
+    QVariantList pts;
+    pts.reserve(s.points.size());
+    for (const QPointF& p : s.points) {
+      pts.append(QVariant::fromValue(p));
+    }
+    QVariantMap entry;
+    entry.insert(QStringLiteral("id"), s.id);
+    entry.insert(QStringLiteral("label"), s.label);
+    entry.insert(QStringLiteral("color"), s.color);
+    entry.insert(QStringLiteral("points"), pts);
+    entry.insert(QStringLiteral("overall"), s.overall);
+    entry.insert(QStringLiteral("hasOverall"), s.hasOverall);
+    m_plotSeries.append(entry);
+  }
+  emit plotChanged();
+
+  // Compose a compact textual summary for the existing results pane.
+  QStringList lines;
+  lines << tr("Overall summary (per output, bin 0):");
+  for (const Series& s : m_series) {
+    if (s.hasOverall) {
+      lines << QStringLiteral("  %1: %2")
+                 .arg(s.label, -12)
+                 .arg(s.overall, 0, 'g', 6);
+    }
+  }
+  lines << QString();
+  lines << tr("Per-block series collected: %1 outputs × ~%2 blocks each.")
+             .arg(m_series.size())
+             .arg(m_series.isEmpty() ? 0 : m_series.first().points.size());
+  setResults(lines.join(QLatin1Char('\n')));
+}
+
+void
+Backend::resetPlotState()
+{
+  m_series.clear();
+  m_currentSeriesIdx = 0;
+  m_plotSeries.clear();
+  m_totalSamples = 0;
+  m_maxValue = 0.0;
+  emit plotChanged();
 }
 
 void

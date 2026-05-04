@@ -7,10 +7,10 @@ import QtQuick.Window 2.15
 
 ApplicationWindow {
     id: root
-    width: 860
-    height: 620
-    minimumWidth: 640
-    minimumHeight: 520
+    width: 920
+    height: 760
+    minimumWidth: 720
+    minimumHeight: 600
     visible: true
     title: qsTr("WaveDiff — A/B audio comparison")
 
@@ -218,27 +218,151 @@ ApplicationWindow {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    Layout.minimumHeight: 280
                     color: Qt.darker(root.panelColor, 1.25)
                     border.color: root.borderColor
                     border.width: 1
                     radius: 4
 
-                    ScrollView {
+                    ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 8
-                        clip: true
+                        spacing: 8
 
-                        TextArea {
-                            id: resultsArea
-                            readOnly: true
-                            selectByMouse: true
-                            wrapMode: TextArea.NoWrap
-                            font.family: "monospace"
-                            font.pixelSize: 13
-                            text: backend.resultsText.length > 0
-                                  ? backend.resultsText
-                                  : qsTr("No results yet. Run a diff to see per-pair RMS and null-test values.")
-                            background: null
+                        Canvas {
+                            id: plotCanvas
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 220
+                            Layout.minimumHeight: 160
+
+                            readonly property var pad: ({ top: 12, right: 12, bottom: 24, left: 60 })
+
+                            Connections {
+                                target: backend
+                                function onPlotChanged() { plotCanvas.requestPaint() }
+                            }
+                            onWidthChanged: requestPaint()
+                            onHeightChanged: requestPaint()
+
+                            onPaint: {
+                                var ctx = getContext("2d")
+                                ctx.reset()
+
+                                var W = width, H = height
+                                var p = pad
+                                var plotW = W - p.left - p.right
+                                var plotH = H - p.top - p.bottom
+
+                                // Background.
+                                ctx.fillStyle = Qt.darker(root.panelColor, 1.6)
+                                ctx.fillRect(p.left, p.top, plotW, plotH)
+                                ctx.strokeStyle = root.borderColor
+                                ctx.lineWidth = 1
+                                ctx.strokeRect(p.left + 0.5, p.top + 0.5, plotW - 1, plotH - 1)
+
+                                var series = backend.plotSeries
+                                var maxX = backend.totalSamples
+                                var maxY = backend.maxValue
+                                if (!series || series.length === 0 || maxX <= 0 || maxY <= 0) {
+                                    ctx.fillStyle = "#888"
+                                    ctx.font = "12px sans-serif"
+                                    ctx.textAlign = "center"
+                                    ctx.textBaseline = "middle"
+                                    ctx.fillText(qsTr("Plot will appear after a diff run."),
+                                                 p.left + plotW / 2, p.top + plotH / 2)
+                                    return
+                                }
+
+                                // Round y-max up a bit for headroom.
+                                var yScale = maxY * 1.08
+
+                                // Gridlines + y labels.
+                                ctx.strokeStyle = Qt.lighter(root.borderColor, 1.05)
+                                ctx.fillStyle = "#aab0b3"
+                                ctx.font = "10px sans-serif"
+                                ctx.textAlign = "right"
+                                ctx.textBaseline = "middle"
+                                for (var k = 0; k <= 4; ++k) {
+                                    var gy = p.top + plotH * k / 4
+                                    ctx.beginPath()
+                                    ctx.moveTo(p.left, gy + 0.5)
+                                    ctx.lineTo(p.left + plotW, gy + 0.5)
+                                    ctx.stroke()
+                                    var v = yScale * (1 - k / 4)
+                                    ctx.fillText(v.toFixed(4), p.left - 6, gy)
+                                }
+
+                                // x labels (samples).
+                                ctx.textAlign = "center"
+                                ctx.textBaseline = "top"
+                                ctx.fillText("0", p.left, p.top + plotH + 6)
+                                ctx.fillText(maxX + " samp", p.left + plotW, p.top + plotH + 6)
+
+                                // Series.
+                                ctx.lineJoin = "round"
+                                ctx.lineCap = "round"
+                                for (var i = 0; i < series.length; ++i) {
+                                    var s = series[i]
+                                    if (!s.points || s.points.length === 0) continue
+                                    ctx.strokeStyle = s.color
+                                    ctx.lineWidth = 2
+                                    ctx.beginPath()
+                                    var first = true
+                                    for (var j = 0; j < s.points.length; ++j) {
+                                        var pt = s.points[j]
+                                        var px = p.left + (pt.x / maxX) * plotW
+                                        var py = p.top + plotH * (1 - pt.y / yScale)
+                                        if (first) { ctx.moveTo(px, py); first = false }
+                                        else { ctx.lineTo(px, py) }
+                                    }
+                                    ctx.stroke()
+                                }
+                            }
+                        }
+
+                        // Legend with overall values.
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: 16
+
+                            Repeater {
+                                model: backend.plotSeries
+                                Row {
+                                    spacing: 6
+                                    Rectangle {
+                                        width: 14; height: 4
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        color: modelData.color
+                                        radius: 2
+                                    }
+                                    Label {
+                                        text: modelData.hasOverall
+                                              ? qsTr("%1 — overall %2").arg(modelData.label).arg(modelData.overall.toFixed(6))
+                                              : modelData.label
+                                        font.pixelSize: 12
+                                        opacity: 0.85
+                                    }
+                                }
+                            }
+                        }
+
+                        ScrollView {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+
+                            TextArea {
+                                id: resultsArea
+                                readOnly: true
+                                selectByMouse: true
+                                wrapMode: TextArea.NoWrap
+                                font.family: "monospace"
+                                font.pixelSize: 13
+                                text: backend.resultsText.length > 0
+                                      ? backend.resultsText
+                                      : qsTr("No results yet. Run a diff to see per-pair RMS and null-test values.")
+                                background: null
+                            }
                         }
                     }
                 }
