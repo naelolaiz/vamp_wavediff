@@ -1,12 +1,24 @@
-// Unit tests for WaveDiffPlugin. No external test framework — plain C++17
-// with <cassert>, wired into CTest from tests/CMakeLists.txt.
+// Unit tests for WaveDiffPlugin. No external test framework — a small
+// CHECK() macro, wired into CTest from tests/CMakeLists.txt.
 
 #include "WaveDiffPlugin.h"
 
-#include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <vector>
+
+// CHECK() is preferred over <cassert>'s assert() because Release builds
+// define NDEBUG, which would silently turn every assertion into a no-op
+// and make the tests pass without actually checking anything.
+#define CHECK(expr)                                                            \
+  do {                                                                         \
+    if (!(expr)) {                                                             \
+      std::fprintf(                                                            \
+        stderr, "CHECK failed at %s:%d: %s\n", __FILE__, __LINE__, #expr);     \
+      std::exit(1);                                                            \
+    }                                                                          \
+  } while (0)
 
 namespace {
 
@@ -34,16 +46,16 @@ test_identical_streams_produce_zero_diff()
 {
   WaveDiffPlugin plugin(48000.0f);
   const size_t block = 1024;
-  assert(plugin.initialise(2, block, block));
+  CHECK(plugin.initialise(2, block, block));
 
   std::vector<float> a(block, 0.5f);
   std::vector<float> b(block, 0.5f);
   auto fs = runOneBlock(plugin, { a.data(), b.data() });
 
-  assert(nearly(fs[0].at(0).values.at(0), 0.5f));
-  assert(nearly(fs[1].at(0).values.at(0), 0.5f));
-  assert(nearly(fs[2].at(0).values.at(0), 0.0f));
-  assert(nearly(fs[3].at(0).values.at(0), 0.0f));
+  CHECK(nearly(fs[0].at(0).values.at(0), 0.5f));
+  CHECK(nearly(fs[1].at(0).values.at(0), 0.5f));
+  CHECK(nearly(fs[2].at(0).values.at(0), 0.0f));
+  CHECK(nearly(fs[3].at(0).values.at(0), 0.0f));
   std::printf("  test_identical_streams_produce_zero_diff: OK\n");
 }
 
@@ -53,16 +65,16 @@ test_constant_offset_diff()
   // A = 1.0, B = 0.5  =>  RMS_A=1, RMS_B=0.5, RMS_diff=0.5, peak=0.5
   WaveDiffPlugin plugin(48000.0f);
   const size_t block = 256;
-  assert(plugin.initialise(2, block, block));
+  CHECK(plugin.initialise(2, block, block));
 
   std::vector<float> a(block, 1.0f);
   std::vector<float> b(block, 0.5f);
   auto fs = runOneBlock(plugin, { a.data(), b.data() });
 
-  assert(nearly(fs[0].at(0).values.at(0), 1.0f));
-  assert(nearly(fs[1].at(0).values.at(0), 0.5f));
-  assert(nearly(fs[2].at(0).values.at(0), 0.5f));
-  assert(nearly(fs[3].at(0).values.at(0), 0.5f));
+  CHECK(nearly(fs[0].at(0).values.at(0), 1.0f));
+  CHECK(nearly(fs[1].at(0).values.at(0), 0.5f));
+  CHECK(nearly(fs[2].at(0).values.at(0), 0.5f));
+  CHECK(nearly(fs[3].at(0).values.at(0), 0.5f));
   std::printf("  test_constant_offset_diff: OK\n");
 }
 
@@ -72,7 +84,7 @@ test_overall_summary_accumulates()
   // Four blocks of A=0.25, B=0.0  =>  overall RMS_A=0.25, RMS_B=0, diff=0.25.
   WaveDiffPlugin plugin(48000.0f);
   const size_t block = 128;
-  assert(plugin.initialise(2, block, block));
+  CHECK(plugin.initialise(2, block, block));
 
   std::vector<float> a(block, 0.25f);
   std::vector<float> b(block, 0.0f);
@@ -80,10 +92,10 @@ test_overall_summary_accumulates()
     runOneBlock(plugin, { a.data(), b.data() });
   }
   auto sum = plugin.getRemainingFeatures();
-  assert(nearly(sum[0].at(0).values.at(0), 0.25f));
-  assert(nearly(sum[1].at(0).values.at(0), 0.0f));
-  assert(nearly(sum[2].at(0).values.at(0), 0.25f));
-  assert(nearly(sum[3].at(0).values.at(0), 0.25f));
+  CHECK(nearly(sum[0].at(0).values.at(0), 0.25f));
+  CHECK(nearly(sum[1].at(0).values.at(0), 0.0f));
+  CHECK(nearly(sum[2].at(0).values.at(0), 0.25f));
+  CHECK(nearly(sum[3].at(0).values.at(0), 0.25f));
   std::printf("  test_overall_summary_accumulates: OK\n");
 }
 
@@ -93,7 +105,7 @@ test_two_pairs_independent()
   // Pair 0 identical (diff=0). Pair 1: A=0.6, B=0.4 (diff=0.2).
   WaveDiffPlugin plugin(48000.0f);
   const size_t block = 64;
-  assert(plugin.initialise(4, block, block));
+  CHECK(plugin.initialise(4, block, block));
 
   std::vector<float> a0(block, 0.3f);
   std::vector<float> b0(block, 0.3f);
@@ -101,10 +113,10 @@ test_two_pairs_independent()
   std::vector<float> b1(block, 0.4f);
   auto fs = runOneBlock(plugin, { a0.data(), b0.data(), a1.data(), b1.data() });
 
-  assert(nearly(fs[2].at(0).values.at(0), 0.0f));
-  assert(nearly(fs[3].at(0).values.at(0), 0.0f));
-  assert(nearly(fs[2].at(0).values.at(1), 0.2f));
-  assert(nearly(fs[3].at(0).values.at(1), 0.2f));
+  CHECK(nearly(fs[2].at(0).values.at(0), 0.0f));
+  CHECK(nearly(fs[3].at(0).values.at(0), 0.0f));
+  CHECK(nearly(fs[2].at(0).values.at(1), 0.2f));
+  CHECK(nearly(fs[3].at(0).values.at(1), 0.2f));
   std::printf("  test_two_pairs_independent: OK\n");
 }
 
@@ -114,16 +126,16 @@ test_db_reporting()
   WaveDiffPlugin plugin(48000.0f);
   plugin.setParameter("report_in_db", 1.0f);
   const size_t block = 256;
-  assert(plugin.initialise(2, block, block));
+  CHECK(plugin.initialise(2, block, block));
 
   std::vector<float> a(block, 1.0f); // 0 dBFS
   std::vector<float> b(block, 1.0f); // identical
   auto fs = runOneBlock(plugin, { a.data(), b.data() });
 
   // RMS A == 1.0 -> 0 dB
-  assert(nearly(fs[0].at(0).values.at(0), 0.0f, 1e-3f));
+  CHECK(nearly(fs[0].at(0).values.at(0), 0.0f, 1e-3f));
   // diff == 0 -> floor (-200 dB)
-  assert(nearly(fs[2].at(0).values.at(0), -200.0f, 1e-3f));
+  CHECK(nearly(fs[2].at(0).values.at(0), -200.0f, 1e-3f));
   std::printf("  test_db_reporting: OK\n");
 }
 
@@ -131,7 +143,7 @@ void
 test_reject_odd_channel_count()
 {
   WaveDiffPlugin plugin(48000.0f);
-  assert(!plugin.initialise(3, 256, 256));
+  CHECK(!plugin.initialise(3, 256, 256));
   std::printf("  test_reject_odd_channel_count: OK\n");
 }
 
@@ -139,9 +151,9 @@ void
 test_reject_invalid_block_sizes()
 {
   WaveDiffPlugin plugin(48000.0f);
-  assert(!plugin.initialise(2, 0, 256));
-  assert(!plugin.initialise(2, 256, 0));
-  assert(!plugin.initialise(2, 512, 256)); // step > block
+  CHECK(!plugin.initialise(2, 0, 256));
+  CHECK(!plugin.initialise(2, 256, 0));
+  CHECK(!plugin.initialise(2, 512, 256)); // step > block
   std::printf("  test_reject_invalid_block_sizes: OK\n");
 }
 
@@ -151,7 +163,7 @@ test_sine_rms_and_peak()
   // Full-scale sine: RMS = 1/sqrt(2) ≈ 0.7071, peak = 1.0.
   WaveDiffPlugin plugin(48000.0f);
   const size_t block = 4800; // exactly 48 cycles of 480 Hz at 48 kHz
-  assert(plugin.initialise(2, block, block));
+  CHECK(plugin.initialise(2, block, block));
 
   std::vector<float> a(block);
   std::vector<float> b(block, 0.0f);
@@ -162,9 +174,9 @@ test_sine_rms_and_peak()
   }
   auto fs = runOneBlock(plugin, { a.data(), b.data() });
 
-  assert(nearly(fs[0].at(0).values.at(0), 0.7071068f, 1e-3f));
-  assert(nearly(fs[2].at(0).values.at(0), 0.7071068f, 1e-3f));
-  assert(nearly(fs[3].at(0).values.at(0), 1.0f, 1e-3f));
+  CHECK(nearly(fs[0].at(0).values.at(0), 0.7071068f, 1e-3f));
+  CHECK(nearly(fs[2].at(0).values.at(0), 0.7071068f, 1e-3f));
+  CHECK(nearly(fs[3].at(0).values.at(0), 1.0f, 1e-3f));
   std::printf("  test_sine_rms_and_peak: OK\n");
 }
 
@@ -173,7 +185,7 @@ test_reset_clears_summary()
 {
   WaveDiffPlugin plugin(48000.0f);
   const size_t block = 128;
-  assert(plugin.initialise(2, block, block));
+  CHECK(plugin.initialise(2, block, block));
 
   std::vector<float> a(block, 0.5f);
   std::vector<float> b(block, 0.0f);
@@ -182,7 +194,7 @@ test_reset_clears_summary()
 
   // After reset with no further processing, summary must be empty.
   auto sum = plugin.getRemainingFeatures();
-  assert(sum.empty());
+  CHECK(sum.empty());
   std::printf("  test_reset_clears_summary: OK\n");
 }
 
