@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QPointF>
 #include <QProcess>
+#include <QQmlEngine>
 #include <QString>
 #include <QStringList>
 #include <QUrl>
@@ -24,6 +25,7 @@
 class Backend : public QObject
 {
   Q_OBJECT
+  QML_ELEMENT
   Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
   Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY statusChanged)
   Q_PROPERTY(QString resultsText READ resultsText NOTIFY resultsChanged)

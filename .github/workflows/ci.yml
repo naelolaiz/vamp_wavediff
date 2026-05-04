@@ -13,8 +13,8 @@ concurrency:
 
 jobs:
   build:
-    name: Build (Ubuntu, Qt5 + Vamp SDK)
-    runs-on: ubuntu-22.04
+    name: Build (Ubuntu, Qt6 + Vamp SDK)
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -26,16 +26,20 @@ jobs:
             cmake \
             ninja-build \
             pkg-config \
-            qtbase5-dev \
-            qtdeclarative5-dev \
-            qtquickcontrols2-5-dev \
-            qml-module-qtquick-controls2 \
-            qml-module-qtquick-dialogs \
-            qml-module-qtquick-layouts \
+            libgl1-mesa-dev \
+            libxkbcommon-dev \
             vamp-plugin-sdk \
             libvamp-sdk2v5 \
             sox \
             libsox-fmt-all
+
+      - name: Install Qt 6.5
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.5.3'
+          host: 'linux'
+          target: 'desktop'
+          cache: true
 
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -61,7 +65,7 @@ jobs:
 
   plugin-only:
     name: Build plugin standalone
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -83,7 +87,7 @@ jobs:
 
   format:
     name: clang-format
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -105,7 +109,7 @@ jobs:
 
   shellcheck:
     name: shellcheck
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 

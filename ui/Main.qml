@@ -1,9 +1,10 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Controls.Material 2.15
-import QtQuick.Layouts 1.15
-import QtQuick.Dialogs 1.3
-import QtQuick.Window 2.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Controls.Material
+import QtQuick.Dialogs
+import QtQuick.Layouts
+import QtQuick.Window
+import WaveDiff
 
 ApplicationWindow {
     id: root
@@ -20,6 +21,8 @@ ApplicationWindow {
 
     readonly property color panelColor: Qt.darker(Material.background, 1.08)
     readonly property color borderColor: Qt.lighter(Material.background, 1.4)
+
+    Backend { id: backend }
 
     header: ToolBar {
         Material.elevation: 2
@@ -50,23 +53,23 @@ ApplicationWindow {
     FileDialog {
         id: fileDialogA
         title: qsTr("Select file A (reference)")
-        selectMultiple: false
+        fileMode: FileDialog.OpenFile
         nameFilters: [ qsTr("Wave files (*.wav)"), qsTr("All files (*)") ]
-        onAccepted: fileAField.text = fileDialogA.fileUrl.toString()
+        onAccepted: fileAField.text = selectedFile.toString()
     }
 
     FileDialog {
         id: fileDialogB
         title: qsTr("Select file B (comparison)")
-        selectMultiple: false
+        fileMode: FileDialog.OpenFile
         nameFilters: [ qsTr("Wave files (*.wav)"), qsTr("All files (*)") ]
-        onAccepted: fileBField.text = fileDialogB.fileUrl.toString()
+        onAccepted: fileBField.text = selectedFile.toString()
     }
 
     MessageDialog {
         id: errorDialog
         title: qsTr("WaveDiff error")
-        icon: StandardIcon.Warning
+        buttons: MessageDialog.Ok
     }
 
     Connections {
@@ -112,7 +115,6 @@ ApplicationWindow {
                         id: fileAField
                         Layout.fillWidth: true
                         placeholderText: qsTr("/path/to/reference.wav")
-                        selectByMouse: true
                     }
                     Button {
                         text: qsTr("Browse…")
@@ -124,7 +126,6 @@ ApplicationWindow {
                         id: fileBField
                         Layout.fillWidth: true
                         placeholderText: qsTr("/path/to/comparison.wav")
-                        selectByMouse: true
                     }
                     Button {
                         text: qsTr("Browse…")
@@ -354,7 +355,6 @@ ApplicationWindow {
                             TextArea {
                                 id: resultsArea
                                 readOnly: true
-                                selectByMouse: true
                                 wrapMode: TextArea.NoWrap
                                 font.family: "monospace"
                                 font.pixelSize: 13

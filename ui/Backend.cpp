@@ -1,5 +1,6 @@
 #include "Backend.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
@@ -30,6 +31,36 @@ constexpr OutputDef kOutputs[] = {
   { "peak_diff", "Peak |A-B|", "#ffa726" },
 };
 
+// Build a VAMP_PATH that puts the freshly-built plugin first, so a stale
+// plugin in ~/.vamp/ or /usr/lib/vamp/ does not get loaded ahead of it.
+QProcessEnvironment
+buildPluginEnvironment()
+{
+  QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+  const QString exeDir = QCoreApplication::applicationDirPath();
+  const QStringList relCandidates = {
+    QStringLiteral("/../plugin"),   // out-of-source build tree
+    QStringLiteral("/../lib/vamp"), // install tree (GNUInstallDirs)
+    QStringLiteral("/../lib64/vamp"),
+  };
+  QStringList prefer;
+  for (const QString& sub : relCandidates) {
+    const QString p = QDir(exeDir + sub).absolutePath();
+    if (QFileInfo(p + QStringLiteral("/vamp_wavediff.so")).isFile()) {
+      prefer << p;
+    }
+  }
+  const QString existing = env.value(QStringLiteral("VAMP_PATH"));
+  if (!existing.isEmpty()) {
+    prefer << existing;
+  }
+  if (!prefer.isEmpty()) {
+    env.insert(QStringLiteral("VAMP_PATH"),
+               prefer.join(QDir::listSeparator()));
+  }
+  return env;
+}
+
 QStringList
 buildRemixArgs(int channelsPerInput)
 {
@@ -49,6 +80,7 @@ Backend::Backend(QObject* parent)
   : QObject(parent), m_process(new QProcess(this))
 {
   m_process->setProcessChannelMode(QProcess::MergedChannels);
+  m_process->setProcessEnvironment(buildPluginEnvironment());
   connect(m_process, &QProcess::errorOccurred, this, &Backend::onProcessError);
 
   m_analyzeAvailable = hasCommand(QString::fromLatin1(kVampHostBinary));
