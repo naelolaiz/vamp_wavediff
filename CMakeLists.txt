@@ -6,6 +6,7 @@ project(vamp_wavediff_suite
 
 option(WAVEDIFF_BUILD_PLUGIN "Build the Vamp plugin"        ON)
 option(WAVEDIFF_BUILD_UI     "Build the Qt Quick frontend"  ON)
+option(WAVEDIFF_BUILD_TESTS  "Build unit tests (CTest)"     ON)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -21,6 +22,11 @@ endif()
 
 if(WAVEDIFF_BUILD_UI)
     add_subdirectory(ui)
+endif()
+
+if(WAVEDIFF_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
 endif()
 
 include(GNUInstallDirs)

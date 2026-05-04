@@ -43,6 +43,9 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
 
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
       - name: Install (staging)
         run: |
           DESTDIR="${{ github.workspace }}/stage" \
@@ -74,6 +77,9 @@ jobs:
 
       - name: Build
         run: cmake --build build --parallel
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
 
   format:
     name: clang-format
