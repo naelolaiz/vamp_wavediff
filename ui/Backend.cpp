@@ -2,6 +2,7 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QDebug>
 #include <QDir>
 #include <QFileInfo>
 #include <QProcessEnvironment>
@@ -263,6 +264,7 @@ Backend::startAnalyzeNext()
           &Backend::onAnalyzeFinished);
 
   const QStringList args{
+    QStringLiteral("-s"), // emit per-block AND overall summary lines
     QStringLiteral("%1:%2").arg(QString::fromLatin1(kPluginKey)).arg(s.id),
     m_mergedPath
   };
@@ -281,7 +283,13 @@ Backend::onAnalyzeFinished(int exitCode, QProcess::ExitStatus status)
     return;
   }
 
-  parseAnalyzeOutput(m_series[m_currentSeriesIdx], output);
+  Series& s = m_series[m_currentSeriesIdx];
+  s.rawOutput = output;
+  qDebug().noquote() << "wavediff[" << s.id << "] raw output:\n" << output;
+  parseAnalyzeOutput(s, output);
+  qDebug() << "wavediff[" << s.id << "] parsed:" << s.points.size()
+           << "points, hasOverall=" << s.hasOverall
+           << "overall=" << s.overall;
   ++m_currentSeriesIdx;
   startAnalyzeNext();
 }
@@ -360,17 +368,31 @@ Backend::rebuildResultsAndPlot()
   // Compose a compact textual summary for the existing results pane.
   QStringList lines;
   lines << tr("Overall summary (per output, bin 0):");
+  bool anyOverall = false;
   for (const Series& s : m_series) {
     if (s.hasOverall) {
       lines << QStringLiteral("  %1: %2")
                  .arg(s.label, -12)
                  .arg(s.overall, 0, 'g', 6);
+      anyOverall = true;
     }
+  }
+  if (!anyOverall) {
+    lines << tr("  (no overall summary lines parsed)");
   }
   lines << QString();
   lines << tr("Per-block series collected: %1 outputs × ~%2 blocks each.")
              .arg(m_series.size())
              .arg(m_series.isEmpty() ? 0 : m_series.first().points.size());
+
+  // Include the raw output of the last invocation so anyone debugging can
+  // see exactly what vamp-simple-host emitted (handy when parsing yields
+  // zero rows for unexpected output formats).
+  if (!m_series.isEmpty() && !m_series.last().rawOutput.isEmpty()) {
+    lines << QString();
+    lines << QStringLiteral("--- raw output (%1) ---").arg(m_series.last().id);
+    lines << m_series.last().rawOutput.trimmed();
+  }
   setResults(lines.join(QLatin1Char('\n')));
 }
 

@@ -80,6 +80,7 @@ private:
     QVector<QPointF> points; // (sample_offset, value)
     double overall = 0.0;
     bool hasOverall = false;
+    QString rawOutput; // verbatim vamp-simple-host stdout/stderr
   };
 
   void setBusy(bool busy);
