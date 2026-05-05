@@ -56,8 +56,7 @@ buildPluginEnvironment()
     prefer << existing;
   }
   if (!prefer.isEmpty()) {
-    env.insert(QStringLiteral("VAMP_PATH"),
-               prefer.join(QDir::listSeparator()));
+    env.insert(QStringLiteral("VAMP_PATH"), prefer.join(QDir::listSeparator()));
   }
   return env;
 }
@@ -288,8 +287,7 @@ Backend::onAnalyzeFinished(int exitCode, QProcess::ExitStatus status)
   qDebug().noquote() << "wavediff[" << s.id << "] raw output:\n" << output;
   parseAnalyzeOutput(s, output);
   qDebug() << "wavediff[" << s.id << "] parsed:" << s.points.size()
-           << "points, hasOverall=" << s.hasOverall
-           << "overall=" << s.overall;
+           << "points, hasOverall=" << s.hasOverall << "overall=" << s.overall;
   ++m_currentSeriesIdx;
   startAnalyzeNext();
 }
