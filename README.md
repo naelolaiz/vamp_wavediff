@@ -24,7 +24,7 @@ decibels via a plugin parameter.
 .
 ├── plugin/          # Vamp plugin (C++17, builds a MODULE library)
 │   └── plugins/     # WaveDiffPlugin.{h,cpp} and descriptor registration
-├── ui/              # Qt 5.15 Quick Controls 2 frontend (Material dark)
+├── ui/              # Qt 6 Quick Controls 2 frontend (Material dark)
 ├── tests/           # CTest unit tests for the plugin core
 ├── examples/        # End-to-end demo (generates ref/candidate/merged wavs)
 ├── scripts/         # merger.sh — SoX-based channel interleaver (CLI helper)
@@ -37,7 +37,8 @@ decibels via a plugin parameter.
 - A C++17 compiler (GCC / Clang)
 - [Vamp Plugin SDK](https://github.com/vamp-plugins/vamp-plugin-sdk)
   (discovered via `pkg-config` or `VAMP_SDK_PATH`)
-- Qt ≥ 5.15 with `QuickControls2`
+- Qt ≥ 6.5 with `QuickControls2` (UI uses `qt_add_qml_module` and
+  `QQmlApplicationEngine::loadFromModule`, both of which need 6.5)
 - [SoX](http://sox.sourceforge.net/) and optionally
   [vamp-simple-host](https://code.soundsoftware.ac.uk/projects/vamp-plugin-sdk)
   for the UI pipeline

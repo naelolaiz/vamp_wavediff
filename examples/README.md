@@ -49,3 +49,34 @@ scripts/merger.sh examples/out/merged-via-sox.wav \
     examples/out/candidate.wav
 vamp-simple-host vamp_wavediff:wavediff examples/out/merged-via-sox.wav -s
 ```
+
+## Multichannel example
+
+`generate_multichannel_example.py` shows the per-pair behaviour. It
+writes a stereo reference, a stereo candidate with a *different* defect
+on each channel, and a 4-channel `merged.wav` interleaved as
+`(A_L, B_L, A_R, B_R)` — exactly the layout the plugin consumes for
+multi-pair inputs.
+
+```sh
+python3 examples/generate_multichannel_example.py
+vamp-simple-host -s vamp_wavediff:wavediff examples/out_multichannel/merged.wav
+```
+
+Defects (intentionally different so the per-pair metrics diverge):
+
+| Pair | Channel | Reference (A)        | Candidate (B)              | Expected null |
+| ---- | ------- | -------------------- | -------------------------- | ------------- |
+| 0    | Left    | 440 Hz sine, -6 dBFS | A + white noise at -30 dBFS | small (~0.018 RMS) |
+| 1    | Right   | 660 Hz sine, -6 dBFS | A × 0.5  (-6 dB mismatch)  | large (~0.177 RMS) |
+
+The plugin reports `bin 0` for pair 0 and `bin 1` for pair 1 in each of
+its four outputs (`rms_a`, `rms_b`, `rms_diff`, `peak_diff`). The
+`-s` flag adds the overall summary line at the end of each output
+stream. Open `plot.svg` in a browser to see the six-panel breakdown
+(reference, candidate, and null-test trace per pair).
+
+> **Heads-up for the Qt UI:** at the moment the UI parser only displays
+> bin 0, so a multi-pair file will still render but you'll only see the
+> Left-channel metrics there. Use `vamp-simple-host` directly for the
+> full per-pair picture.
